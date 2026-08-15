@@ -313,12 +313,10 @@ export function CandidateCreateDialog({
         });
 
         if (!res.ok) {
-          const errData = await res.json();
-          toast({
-            title: "Failed to parse resume",
-            description: errData.error,
-            variant: "destructive",
-          });
+          const text = await res.text();
+          let errMsg = "Failed to parse resume";
+          try { errMsg = JSON.parse(text).error ?? errMsg; } catch { /* HTML error page */ }
+          toast({ title: "Failed to parse resume", description: errMsg, variant: "destructive" });
           setParsingResume(false);
           return;
         }

@@ -70,8 +70,10 @@ async function parseOneResume(
   });
 
   if (!res.ok) {
-    const errData = await res.json();
-    throw new Error(errData.error || "Failed to parse resume");
+    const text = await res.text();
+    let errMsg = "Failed to parse resume";
+    try { errMsg = JSON.parse(text).error ?? errMsg; } catch { /* HTML error page */ }
+    throw new Error(errMsg);
   }
 
   const reader = res.body?.getReader();
