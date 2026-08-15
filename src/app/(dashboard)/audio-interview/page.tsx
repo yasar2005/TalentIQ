@@ -18,7 +18,6 @@ interface Question {
   text: string;
   options?: { maxSeconds?: number };
 }
-
 interface EvalResult {
   score: number;
   verdict: string;
@@ -27,14 +26,12 @@ interface EvalResult {
   improvements: string[];
   delivery: string;
 }
-
 interface AnswerRecord {
   questionId: string;
   transcript: string;
   evaluation: EvalResult;
   audioUrl: string;
 }
-
 type Phase = "select" | "intro" | "question" | "recording" | "evaluating" | "result" | "done";
 
 const VERDICT_COLOR: Record<string, string> = {
@@ -44,20 +41,18 @@ const VERDICT_COLOR: Record<string, string> = {
   Poor: "text-red-600 dark:text-red-400",
 };
 
-/* ── TTS helper ─────────────────────────────────────────────────── */
+/* ── TTS ────────────────────────────────────────────────────────── */
 function speak(text: string, onEnd?: () => void) {
   if (typeof window === "undefined" || !window.speechSynthesis) { onEnd?.(); return; }
   window.speechSynthesis.cancel();
   const utt = new SpeechSynthesisUtterance(text);
   utt.rate = 0.95;
-  utt.pitch = 1;
   if (onEnd) utt.onend = onEnd;
   window.speechSynthesis.speak(utt);
 }
 
 /* ── Score ring ─────────────────────────────────────────────────── */
 function ScoreRing({ score }: { score: number }) {
-  const pct = (score / 10) * 100;
   const color = score >= 8 ? "#22c55e" : score >= 6 ? "#3b82f6" : score >= 4 ? "#eab308" : "#ef4444";
   return (
     <div className="relative flex h-24 w-24 items-center justify-center">
@@ -65,7 +60,7 @@ function ScoreRing({ score }: { score: number }) {
         <circle cx="40" cy="40" r="34" fill="none" stroke="currentColor" strokeWidth="6" className="text-muted/30" />
         <circle cx="40" cy="40" r="34" fill="none" stroke={color} strokeWidth="6"
           strokeDasharray={`${2 * Math.PI * 34}`}
-          strokeDashoffset={`${2 * Math.PI * 34 * (1 - pct / 100)}`}
+          strokeDashoffset={`${2 * Math.PI * 34 * (1 - (score / 10))}`}
           strokeLinecap="round" />
       </svg>
       <span className="text-2xl font-bold">{score}<span className="text-sm font-normal text-muted-foreground">/10</span></span>
@@ -73,31 +68,34 @@ function ScoreRing({ score }: { score: number }) {
   );
 }
 
-/* ── Main component ─────────────────────────────────────────────── */
+/* ── Main ───────────────────────────────────────────────────────── */
 export default function AudioInterviewPage() {
   const interviews = trpc.interview.list.useQuery({ limit: 50 });
+  const utils = trpc.useUtils();
 
   const [questions, setQuestions] = useState<Question[]>([]);
   const [qIndex, setQIndex] = useState(0);
   const [phase, setPhase] = useState<Phase>("select");
   const [answers, setAnswers] = useState<AnswerRecord[]>([]);
   const [loadingInterview, setLoadingInterview] = useState(false);
-
   const [secondsLeft, setSecondsLeft] = useState(0);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [currentEval, setCurrentEval] = useState<EvalResult | null>(null);
   const [currentTranscript, setCurrentTranscript] = useState("");
+  // live words shown while recording
+  const [liveText, setLiveText] = useState("");
   const [speaking, setSpeaking] = useState(false);
 
   const mrRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  // keep latest question ref so onstop closure always has current value
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const srRef = useRef<any>(null); // SpeechRecognition instance
   const currentQRef = useRef<Question | null>(null);
   const maxSecRef = useRef(120);
-  const utils = trpc.useUtils();
 
   const currentQ = questions[qIndex];
+  const maxSec = currentQ?.options?.maxSeconds ?? 120;
 
   /* ── Select interview ─────────────────────────────────────────── */
   const handleSelectInterview = useCallback(async (id: string) => {
@@ -118,7 +116,15 @@ export default function AudioInterviewPage() {
     }
   }, [utils]);
 
-  /* ── Evaluate (called directly from onstop) ───────────────────── */
+  /* ── Stop live speech recognition ────────────────────────────── */
+  const stopSpeechRecognition = useCallback(() => {
+    if (srRef.current) {
+      srRef.current.stop();
+      srRef.current = null;
+    }
+  }, []);
+
+  /* ── Evaluate after recording stops ──────────────────────────── */
   const evaluateAnswer = useCallback(async (blob: Blob, question: Question, maxSec: number) => {
     const url = URL.createObjectURL(blob);
     setAudioUrl(url);
@@ -136,20 +142,21 @@ export default function AudioInterviewPage() {
       setPhase("result");
     } catch (err) {
       console.error("Evaluation error:", err);
-      setCurrentTranscript("");
-      setCurrentEval(null);
-      setPhase("intro"); // let user retry
+      setPhase("intro");
     }
   }, []);
 
-  /* ── Stop recording (clears timer, triggers evaluation via onstop) */
+  /* ── Stop recording → triggers evaluate ──────────────────────── */
   const stopRecording = useCallback(() => {
+    stopSpeechRecognition();
     if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
-    mrRef.current?.stop(); // triggers mr.onstop → evaluateAnswer
+    if (mrRef.current && mrRef.current.state !== "inactive") {
+      mrRef.current.stop(); // onstop fires → evaluateAnswer
+    }
     mrRef.current = null;
-  }, []);
+  }, [stopSpeechRecognition]);
 
-  /* ── Start recording ──────────────────────────────────────────── */
+  /* ── Start recording + live speech recognition ────────────────── */
   const startRecording = useCallback(async (question: Question, maxSec: number) => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -157,26 +164,54 @@ export default function AudioInterviewPage() {
       const mr = new MediaRecorder(stream);
 
       mr.ondataavailable = (e) => { if (e.data.size > 0) chunksRef.current.push(e.data); };
-
       mr.onstop = () => {
         stream.getTracks().forEach((t) => t.stop());
         const blob = new Blob(chunksRef.current, { type: "audio/webm" });
-        const q = currentQRef.current ?? question;
-        const ms = maxSecRef.current;
-        void evaluateAnswer(blob, q, ms);
+        void evaluateAnswer(blob, currentQRef.current ?? question, maxSecRef.current);
       };
 
       mr.start();
       mrRef.current = mr;
       setPhase("recording");
+      setLiveText("");
       setSecondsLeft(maxSec);
 
+      // Live speech recognition
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+      if (SR) {
+        const sr = new SR();
+        sr.continuous = true;
+        sr.interimResults = true;
+        sr.lang = "en-US";
+        let finalText = "";
+        sr.onresult = (e: { results: SpeechRecognitionResultList }) => {
+          let interim = "";
+          for (let i = e.results.length - 1; i >= 0; i--) {
+            if (e.results[i].isFinal) {
+              finalText += e.results[i][0].transcript + " ";
+              break;
+            } else {
+              interim = e.results[i][0].transcript;
+            }
+          }
+          setLiveText((finalText + interim).trim());
+        };
+        sr.onerror = () => { /* ignore */ };
+        sr.start();
+        srRef.current = sr;
+      }
+
+      // Countdown timer
       timerRef.current = setInterval(() => {
         setSecondsLeft((s) => {
           if (s <= 1) {
-            // time's up — stop recording
-            if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
-            mrRef.current?.stop();
+            clearInterval(timerRef.current!);
+            timerRef.current = null;
+            stopSpeechRecognition();
+            if (mrRef.current && mrRef.current.state !== "inactive") {
+              mrRef.current.stop();
+            }
             mrRef.current = null;
             return 0;
           }
@@ -186,35 +221,35 @@ export default function AudioInterviewPage() {
     } catch {
       setPhase("intro");
     }
-  }, [evaluateAnswer]);
+  }, [evaluateAnswer, stopSpeechRecognition]);
 
-  /* ── Speak question then start recording ─────────────────────── */
+  /* ── Speak question then record ───────────────────────────────── */
   const startQuestion = useCallback(() => {
     if (!currentQ) return;
-    const maxSec = currentQ.options?.maxSeconds ?? 120;
+    const ms = currentQ.options?.maxSeconds ?? 120;
     currentQRef.current = currentQ;
-    maxSecRef.current = maxSec;
+    maxSecRef.current = ms;
     setPhase("question");
     setSpeaking(true);
     setAudioUrl(null);
     setCurrentEval(null);
     setCurrentTranscript("");
+    setLiveText("");
     speak(`Question ${qIndex + 1}. ${currentQ.text}`, () => {
       setSpeaking(false);
-      void startRecording(currentQ, maxSec);
+      void startRecording(currentQ, ms);
     });
   }, [currentQ, qIndex, startRecording]);
 
   /* ── Next question / finish ───────────────────────────────────── */
   const handleNext = useCallback(() => {
     if (!currentQ || !currentEval || !audioUrl) return;
-    const record: AnswerRecord = {
+    const updated = [...answers, {
       questionId: currentQ.id,
       transcript: currentTranscript,
       evaluation: currentEval,
       audioUrl,
-    };
-    const updated = [...answers, record];
+    }];
     setAnswers(updated);
     if (qIndex + 1 >= questions.length) {
       setPhase("done");
@@ -228,11 +263,7 @@ export default function AudioInterviewPage() {
     ? Math.round(answers.reduce((s, a) => s + a.evaluation.score, 0) / answers.length)
     : 0;
 
-  const maxSec = currentQ?.options?.maxSeconds ?? 120;
-
-  /* ── Render ───────────────────────────────────────────────────── */
-
-  // PHASE: select
+  /* ── SELECT phase ─────────────────────────────────────────────── */
   if (phase === "select") {
     return (
       <div className="mx-auto max-w-2xl space-y-6 py-8">
@@ -243,24 +274,23 @@ export default function AudioInterviewPage() {
           </p>
         </div>
         {interviews.isLoading ? (
-          <div className="flex items-center gap-2 text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Loading interviews...</div>
+          <div className="flex items-center gap-2 text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" /> Loading interviews...
+          </div>
         ) : (
           <div className="space-y-2">
             {(interviews.data?.interviews ?? []).map((iv) => {
-              const questionCount = typeof iv.questions === "number" ? iv.questions : 0;
+              const qCount = typeof iv.questions === "number" ? iv.questions : 0;
               return (
-                <button
-                  key={iv.id}
-                  onClick={() => handleSelectInterview(iv.id)}
+                <button key={iv.id} onClick={() => handleSelectInterview(iv.id)}
                   disabled={loadingInterview}
                   className={cn(
                     "flex w-full items-center justify-between rounded-lg border px-4 py-3 text-left transition-colors",
                     "hover:border-primary hover:bg-primary/5 disabled:opacity-60"
-                  )}
-                >
+                  )}>
                   <div>
                     <p className="font-medium">{iv.title}</p>
-                    <p className="text-xs text-muted-foreground">{questionCount} question{questionCount !== 1 ? "s" : ""}</p>
+                    <p className="text-xs text-muted-foreground">{qCount} question{qCount !== 1 ? "s" : ""}</p>
                   </div>
                   {loadingInterview
                     ? <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
@@ -274,7 +304,7 @@ export default function AudioInterviewPage() {
     );
   }
 
-  // PHASE: done — final report
+  /* ── DONE phase ───────────────────────────────────────────────── */
   if (phase === "done") {
     return (
       <div className="mx-auto max-w-2xl space-y-6 py-8">
@@ -292,7 +322,6 @@ export default function AudioInterviewPage() {
             </div>
           </CardContent>
         </Card>
-
         <div className="space-y-4">
           {answers.map((a, i) => (
             <Card key={a.questionId}>
@@ -310,15 +339,19 @@ export default function AudioInterviewPage() {
                 </div>
               </CardHeader>
               <CardContent className="space-y-3 text-sm">
-                <div className="rounded-md bg-muted/50 px-3 py-2 text-xs italic text-muted-foreground">
-                  &ldquo;{a.transcript}&rdquo;
-                </div>
+                {a.transcript && (
+                  <div className="rounded-md bg-muted/50 px-3 py-2 text-xs italic text-muted-foreground">
+                    &ldquo;{a.transcript}&rdquo;
+                  </div>
+                )}
                 <p>{a.evaluation.summary}</p>
                 {a.evaluation.strengths.length > 0 && (
                   <div>
                     <p className="text-xs font-semibold text-green-600 dark:text-green-400 mb-1">Strengths</p>
                     <ul className="space-y-0.5 text-xs">
-                      {a.evaluation.strengths.map((s, si) => <li key={si} className="flex gap-1.5"><CheckCircle2 className="mt-0.5 h-3 w-3 shrink-0 text-green-500" />{s}</li>)}
+                      {a.evaluation.strengths.map((s, si) => (
+                        <li key={si} className="flex gap-1.5"><CheckCircle2 className="mt-0.5 h-3 w-3 shrink-0 text-green-500" />{s}</li>
+                      ))}
                     </ul>
                   </div>
                 )}
@@ -335,7 +368,6 @@ export default function AudioInterviewPage() {
             </Card>
           ))}
         </div>
-
         <Button variant="outline" onClick={() => { setPhase("select"); setQuestions([]); }}>
           Start Another Interview
         </Button>
@@ -343,7 +375,7 @@ export default function AudioInterviewPage() {
     );
   }
 
-  // PHASES: intro / question / recording / evaluating / result
+  /* ── INTERVIEW phases ─────────────────────────────────────────── */
   const progress = questions.length > 0 ? (qIndex / questions.length) * 100 : 0;
 
   return (
@@ -359,7 +391,7 @@ export default function AudioInterviewPage() {
 
       {/* Question card */}
       <Card>
-        <CardContent className="pt-6 space-y-4">
+        <CardContent className="pt-6 space-y-3">
           <div className="flex items-start gap-3">
             <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
               {qIndex + 1}
@@ -373,20 +405,19 @@ export default function AudioInterviewPage() {
         </CardContent>
       </Card>
 
-      {/* Phase: intro */}
+      {/* INTRO */}
       {phase === "intro" && (
         <div className="flex flex-col items-center gap-4 py-4">
           <p className="text-sm text-muted-foreground text-center">
             AI will read the question aloud, then recording starts automatically.
           </p>
           <Button onClick={startQuestion} className="gap-2">
-            <Volume2 className="h-4 w-4" />
-            Start Question
+            <Volume2 className="h-4 w-4" /> Start Question
           </Button>
         </div>
       )}
 
-      {/* Phase: question — AI speaking */}
+      {/* AI SPEAKING */}
       {phase === "question" && speaking && (
         <div className="flex flex-col items-center gap-3 py-6">
           <div className="flex gap-1">
@@ -399,7 +430,7 @@ export default function AudioInterviewPage() {
         </div>
       )}
 
-      {/* Phase: recording */}
+      {/* RECORDING — with live transcript */}
       {phase === "recording" && (
         <div className="flex flex-col items-center gap-4 py-4">
           <div className="relative flex h-20 w-20 items-center justify-center">
@@ -411,17 +442,24 @@ export default function AudioInterviewPage() {
           <div className="text-center">
             <p className="text-sm font-medium text-destructive animate-pulse">Recording...</p>
             <p className="text-2xl font-bold tabular-nums mt-1">{secondsLeft}s</p>
-            <p className="text-xs text-muted-foreground">remaining</p>
           </div>
           <Progress value={((maxSec - secondsLeft) / maxSec) * 100} className="h-2 w-full" />
+
+          {/* Live speech display */}
+          <div className="w-full min-h-[64px] rounded-lg border bg-muted/30 px-4 py-3">
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">You are saying...</p>
+            <p className="text-sm text-foreground leading-relaxed">
+              {liveText || <span className="italic text-muted-foreground">Start speaking...</span>}
+            </p>
+          </div>
+
           <Button variant="outline" size="sm" onClick={stopRecording} className="gap-2">
-            <MicOff className="h-4 w-4" />
-            Done — Evaluate My Answer
+            <MicOff className="h-4 w-4" /> Done — Evaluate My Answer
           </Button>
         </div>
       )}
 
-      {/* Phase: evaluating */}
+      {/* EVALUATING */}
       {phase === "evaluating" && (
         <div className="flex flex-col items-center gap-3 py-8">
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -429,10 +467,9 @@ export default function AudioInterviewPage() {
         </div>
       )}
 
-      {/* Phase: result */}
+      {/* RESULT */}
       {phase === "result" && currentEval && (
         <div className="space-y-4">
-          {/* Score */}
           <Card>
             <CardContent className="flex items-center gap-5 pt-5">
               <ScoreRing score={currentEval.score} />
@@ -445,7 +482,7 @@ export default function AudioInterviewPage() {
             </CardContent>
           </Card>
 
-          {/* Transcript — what you said */}
+          {/* What you said */}
           {currentTranscript && (
             <div className="rounded-lg border bg-muted/30 px-4 py-3">
               <p className="mb-1 text-xs font-semibold text-muted-foreground uppercase tracking-wide">What You Said</p>
@@ -453,10 +490,8 @@ export default function AudioInterviewPage() {
             </div>
           )}
 
-          {/* Playback */}
           {audioUrl && <audio src={audioUrl} controls className="h-9 w-full" />}
 
-          {/* Strengths & improvements */}
           <div className="grid grid-cols-2 gap-3">
             <div className="rounded-lg border bg-green-50 dark:bg-green-950/20 p-3">
               <p className="mb-2 text-xs font-semibold text-green-700 dark:text-green-400">Strengths</p>
@@ -480,18 +515,15 @@ export default function AudioInterviewPage() {
             <p className="text-xs text-muted-foreground border-l-2 border-muted pl-3">{currentEval.delivery}</p>
           )}
 
-          {/* Actions */}
           <div className="flex gap-2">
             <Button variant="outline" size="sm" className="gap-1.5"
-              onClick={() => { setPhase("intro"); setCurrentEval(null); setAudioUrl(null); setCurrentTranscript(""); }}>
+              onClick={() => { setPhase("intro"); setCurrentEval(null); setAudioUrl(null); setCurrentTranscript(""); setLiveText(""); }}>
               <RotateCcw className="h-3.5 w-3.5" /> Retry
             </Button>
             <Button size="sm" className="flex-1 gap-1.5" onClick={handleNext}>
-              {qIndex + 1 >= questions.length ? (
-                <><Trophy className="h-3.5 w-3.5" /> Finish Interview</>
-              ) : (
-                <><ChevronRight className="h-3.5 w-3.5" /> Next Question</>
-              )}
+              {qIndex + 1 >= questions.length
+                ? <><Trophy className="h-3.5 w-3.5" /> Finish Interview</>
+                : <><ChevronRight className="h-3.5 w-3.5" /> Next Question</>}
             </Button>
           </div>
         </div>
