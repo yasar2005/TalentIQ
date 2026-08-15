@@ -1,8 +1,11 @@
 import * as pdfjs from "pdfjs-dist/legacy/build/pdf.mjs";
 
-// Disable worker in Node.js server environment
+// In Node.js there is no worker thread — use the fake worker bundled with pdfjs.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-(pdfjs as any).GlobalWorkerOptions.workerSrc = false;
+(pdfjs as any).GlobalWorkerOptions.workerSrc = new URL(
+  "pdfjs-dist/legacy/build/pdf.worker.mjs",
+  import.meta.url,
+).toString();
 
 export async function extractPdfText(buffer: Buffer): Promise<string> {
   const uint8 = new Uint8Array(buffer);
