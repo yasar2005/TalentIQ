@@ -1104,6 +1104,7 @@ export const interviewRouter = router({
         CODING: 0,
         WHITEBOARD: 0,
         RESEARCH: 0,
+        AUDIO: 0,
       };
       for (const q of questionRows ?? []) {
         const t = (q.type as string) ?? "OPEN_ENDED";

@@ -1,8 +1,30 @@
 import { createLogger } from "@/lib/logger";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { NextResponse } from "next/server";
+import { GoogleGenAI } from "@google/genai";
 
 const log = createLogger("api/session/upload");
+
+async function transcribeAudio(buffer: Buffer, mimeType: string): Promise<string | null> {
+  if (!process.env.GEMINI_API_KEY) return null;
+  try {
+    const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+    const result = await ai.models.generateContent({
+      model: "gemini-2.0-flash",
+      contents: [{
+        role: "user",
+        parts: [
+          { inlineData: { mimeType, data: buffer.toString("base64") } },
+          { text: "Transcribe this audio response accurately. Return only the transcription text, no labels or commentary." },
+        ],
+      }],
+    });
+    return result.text?.trim() ?? null;
+  } catch (err) {
+    log.warn("Transcription failed:", err);
+    return null;
+  }
+}
 
 /**
  * Upload a file (audio recording or screenshot) to Supabase Storage.
@@ -28,11 +50,20 @@ export async function POST(req: Request) {
       );
     }
 
-    if (type !== "recording" && type !== "screenshot") {
+    if (type !== "recording" && type !== "screenshot" && type !== "audio_answer") {
       return NextResponse.json(
-        { error: 'type must be "recording" or "screenshot"' },
+        { error: 'type must be "recording", "screenshot", or "audio_answer"' },
         { status: 400 },
       );
+    }
+
+    const buffer = Buffer.from(await file.arrayBuffer());
+
+    // For audio answers (AUDIO question type), transcribe and return immediately
+    if (type === "audio_answer") {
+      const mimeType = file.type || "audio/webm";
+      const transcript = await transcribeAudio(buffer, mimeType);
+      return NextResponse.json({ transcript });
     }
 
     const bucket = type === "recording" ? "recordings" : "screenshots";
@@ -40,8 +71,6 @@ export async function POST(req: Request) {
       ? (file.type?.includes("mp4") || file.type?.includes("m4a") ? "m4a" : "webm")
       : "jpg";
     const storagePath = `${sessionId}/${filename || `${Date.now()}.${defaultExt}`}`;
-
-    const buffer = Buffer.from(await file.arrayBuffer());
 
     const defaultContentType = type === "recording"
       ? (file.type?.includes("mp4") ? "audio/mp4" : "audio/webm")

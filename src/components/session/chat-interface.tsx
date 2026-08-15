@@ -1091,7 +1091,7 @@ export function ChatInterface({
       const formData = new FormData();
       formData.append("file", audioBlob, "answer.webm");
       formData.append("sessionId", sessionId);
-      formData.append("questionId", interview.questions[currentQuestion]?.id ?? "");
+      formData.append("type", "audio_answer");
       const uploadRes = await fetch("/api/session/upload", { method: "POST", body: formData });
       if (!uploadRes.ok) return;
       const { transcript } = await uploadRes.json();

@@ -719,7 +719,8 @@ export type Database = {
         | "MULTIPLE_CHOICE"
         | "CODING"
         | "WHITEBOARD"
-        | "RESEARCH";
+        | "RESEARCH"
+        | "AUDIO";
       SessionStatus: "IN_PROGRESS" | "COMPLETED" | "ABANDONED";
       MessageRole: "USER" | "ASSISTANT" | "SYSTEM";
       ContentType:
