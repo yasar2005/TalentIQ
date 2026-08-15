@@ -1,25 +1,26 @@
 import { createLogger } from "@/lib/logger";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { NextResponse } from "next/server";
-import { GoogleGenAI } from "@google/genai";
+import { getProvider, REPORT_MODEL } from "@/lib/ai/registry";
 
 const log = createLogger("api/session/upload");
 
 async function transcribeAudio(buffer: Buffer, mimeType: string): Promise<string | null> {
-  if (!process.env.GEMINI_API_KEY) return null;
   try {
-    const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-    const result = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents: [{
+    const provider = getProvider(REPORT_MODEL);
+    const result = await provider.generateResponse({
+      messages: [{
         role: "user",
-        parts: [
-          { inlineData: { mimeType, data: buffer.toString("base64") } },
-          { text: "Transcribe this audio response accurately. Return only the transcription text, no labels or commentary." },
+        content: [
+          { type: "inline_audio", mimeType, data: buffer.toString("base64") },
+          { type: "text", text: "Transcribe this audio response accurately. Return only the transcription text, no labels or commentary." },
         ],
       }],
+      temperature: 0.1,
+      maxTokens: 512,
+      model: REPORT_MODEL,
     });
-    return result.text?.trim() ?? null;
+    return result.content.trim() || null;
   } catch (err) {
     log.warn("Transcription failed:", err);
     return null;
