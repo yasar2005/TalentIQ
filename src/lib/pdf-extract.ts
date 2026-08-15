@@ -9,9 +9,8 @@ export async function extractPdfText(buffer: Buffer): Promise<string> {
 
   const loadingTask = pdfjs.getDocument({
     data: uint8,
-    // These two flags make pdfjs tolerate broken xref tables
+    // Tolerate broken xref tables
     stopAtErrors: false,
-    ignoreErrors: true,
   });
 
   const pdf = await loadingTask.promise;
