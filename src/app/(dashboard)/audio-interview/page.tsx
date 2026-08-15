@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useState, useRef, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -46,10 +46,7 @@ const VERDICT_COLOR: Record<string, string> = {
 
 /* ── TTS helper ─────────────────────────────────────────────────── */
 function speak(text: string, onEnd?: () => void) {
-  if (typeof window === "undefined" || !window.speechSynthesis) {
-    onEnd?.();
-    return;
-  }
+  if (typeof window === "undefined" || !window.speechSynthesis) { onEnd?.(); return; }
   window.speechSynthesis.cancel();
   const utt = new SpeechSynthesisUtterance(text);
   utt.rate = 0.95;
@@ -80,20 +77,14 @@ function ScoreRing({ score }: { score: number }) {
 export default function AudioInterviewPage() {
   const interviews = trpc.interview.list.useQuery({ limit: 50 });
 
-  const [selectedInterviewId, setSelectedInterviewId] = useState<string | null>(null);
   const [questions, setQuestions] = useState<Question[]>([]);
   const [qIndex, setQIndex] = useState(0);
   const [phase, setPhase] = useState<Phase>("select");
   const [answers, setAnswers] = useState<AnswerRecord[]>([]);
   const [loadingInterview, setLoadingInterview] = useState(false);
 
-  // recording state
-  const [recording, setRecording] = useState(false);
   const [secondsLeft, setSecondsLeft] = useState(0);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
-  const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
-  const [evaluating, setEvaluating] = useState(false);
-  void evaluating; // used to show loading state implicitly via phase
   const [currentEval, setCurrentEval] = useState<EvalResult | null>(null);
   const [currentTranscript, setCurrentTranscript] = useState("");
   const [speaking, setSpeaking] = useState(false);
@@ -101,10 +92,12 @@ export default function AudioInterviewPage() {
   const mrRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // keep latest question ref so onstop closure always has current value
+  const currentQRef = useRef<Question | null>(null);
+  const maxSecRef = useRef(120);
   const utils = trpc.useUtils();
 
   const currentQ = questions[qIndex];
-  const maxSec = currentQ?.options?.maxSeconds ?? 120;
 
   /* ── Select interview ─────────────────────────────────────────── */
   const handleSelectInterview = useCallback(async (id: string) => {
@@ -117,7 +110,6 @@ export default function AudioInterviewPage() {
       );
       if (audioQs.length === 0) return;
       setQuestions(audioQs);
-      setSelectedInterviewId(id);
       setQIndex(0);
       setAnswers([]);
       setPhase("intro");
@@ -126,91 +118,92 @@ export default function AudioInterviewPage() {
     }
   }, [utils]);
 
-  /* ── Speak question then start recording ─────────────────────── */
-  const startQuestion = useCallback(() => {
-    if (!currentQ) return;
-    setPhase("question");
-    setSpeaking(true);
-    setAudioUrl(null);
-    setAudioBlob(null);
-    setCurrentEval(null);
-    setCurrentTranscript("");
-    speak(`Question ${qIndex + 1}. ${currentQ.text}`, () => {
-      setSpeaking(false);
-      setPhase("recording");
-      startRecording();
-    });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentQ, qIndex]);
+  /* ── Evaluate (called directly from onstop) ───────────────────── */
+  const evaluateAnswer = useCallback(async (blob: Blob, question: Question, maxSec: number) => {
+    const url = URL.createObjectURL(blob);
+    setAudioUrl(url);
+    setPhase("evaluating");
+    try {
+      const fd = new FormData();
+      fd.append("file", blob, "answer.webm");
+      fd.append("question", question.text);
+      fd.append("maxSeconds", String(maxSec));
+      const res = await fetch("/api/audio-interview/evaluate", { method: "POST", body: fd });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      setCurrentTranscript(data.transcript ?? "");
+      setCurrentEval(data.evaluation);
+      setPhase("result");
+    } catch (err) {
+      console.error("Evaluation error:", err);
+      setCurrentTranscript("");
+      setCurrentEval(null);
+      setPhase("intro"); // let user retry
+    }
+  }, []);
 
-  /* ── Recording ────────────────────────────────────────────────── */
-  const startRecording = useCallback(async () => {
+  /* ── Stop recording (clears timer, triggers evaluation via onstop) */
+  const stopRecording = useCallback(() => {
+    if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+    mrRef.current?.stop(); // triggers mr.onstop → evaluateAnswer
+    mrRef.current = null;
+  }, []);
+
+  /* ── Start recording ──────────────────────────────────────────── */
+  const startRecording = useCallback(async (question: Question, maxSec: number) => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       chunksRef.current = [];
       const mr = new MediaRecorder(stream);
+
       mr.ondataavailable = (e) => { if (e.data.size > 0) chunksRef.current.push(e.data); };
+
       mr.onstop = () => {
         stream.getTracks().forEach((t) => t.stop());
         const blob = new Blob(chunksRef.current, { type: "audio/webm" });
-        setAudioBlob(blob);
-        setAudioUrl(URL.createObjectURL(blob));
+        const q = currentQRef.current ?? question;
+        const ms = maxSecRef.current;
+        void evaluateAnswer(blob, q, ms);
       };
+
       mr.start();
       mrRef.current = mr;
-      setRecording(true);
+      setPhase("recording");
       setSecondsLeft(maxSec);
+
       timerRef.current = setInterval(() => {
         setSecondsLeft((s) => {
           if (s <= 1) {
-            stopRecording();
+            // time's up — stop recording
+            if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+            mrRef.current?.stop();
+            mrRef.current = null;
             return 0;
           }
           return s - 1;
         });
       }, 1000);
     } catch {
-      setPhase("question");
+      setPhase("intro");
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [maxSec]);
+  }, [evaluateAnswer]);
 
-  const stopRecording = useCallback(() => {
-    mrRef.current?.stop();
-    mrRef.current = null;
-    setRecording(false);
-    if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
-  }, []);
-
-  /* ── Auto-evaluate when blob is ready ────────────────────────── */
-  useEffect(() => {
-    if (!audioBlob || !currentQ || phase !== "recording") return;
-    void evaluateAnswer(audioBlob);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [audioBlob]);
-
-  const evaluateAnswer = useCallback(async (blob: Blob) => {
+  /* ── Speak question then start recording ─────────────────────── */
+  const startQuestion = useCallback(() => {
     if (!currentQ) return;
-    setEvaluating(true);
-    setPhase("evaluating");
-    try {
-      const fd = new FormData();
-      fd.append("file", blob, "answer.webm");
-      fd.append("question", currentQ.text);
-      fd.append("maxSeconds", String(maxSec));
-      const res = await fetch("/api/audio-interview/evaluate", { method: "POST", body: fd });
-      const data = await res.json();
-      if (data.error) throw new Error(data.error);
-      setCurrentTranscript(data.transcript);
-      setCurrentEval(data.evaluation);
-      setPhase("result");
-    } catch (err) {
-      console.error(err);
-      setPhase("recording");
-    } finally {
-      setEvaluating(false);
-    }
-  }, [currentQ, maxSec]);
+    const maxSec = currentQ.options?.maxSeconds ?? 120;
+    currentQRef.current = currentQ;
+    maxSecRef.current = maxSec;
+    setPhase("question");
+    setSpeaking(true);
+    setAudioUrl(null);
+    setCurrentEval(null);
+    setCurrentTranscript("");
+    speak(`Question ${qIndex + 1}. ${currentQ.text}`, () => {
+      setSpeaking(false);
+      void startRecording(currentQ, maxSec);
+    });
+  }, [currentQ, qIndex, startRecording]);
 
   /* ── Next question / finish ───────────────────────────────────── */
   const handleNext = useCallback(() => {
@@ -235,9 +228,11 @@ export default function AudioInterviewPage() {
     ? Math.round(answers.reduce((s, a) => s + a.evaluation.score, 0) / answers.length)
     : 0;
 
+  const maxSec = currentQ?.options?.maxSeconds ?? 120;
+
   /* ── Render ───────────────────────────────────────────────────── */
 
-  // PHASE: select interview
+  // PHASE: select
   if (phase === "select") {
     return (
       <div className="mx-auto max-w-2xl space-y-6 py-8">
@@ -267,7 +262,9 @@ export default function AudioInterviewPage() {
                     <p className="font-medium">{iv.title}</p>
                     <p className="text-xs text-muted-foreground">{questionCount} question{questionCount !== 1 ? "s" : ""}</p>
                   </div>
-                  {loadingInterview ? <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
+                  {loadingInterview
+                    ? <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                    : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
                 </button>
               );
             })}
@@ -339,7 +336,7 @@ export default function AudioInterviewPage() {
           ))}
         </div>
 
-        <Button variant="outline" onClick={() => { setPhase("select"); setSelectedInterviewId(null); }}>
+        <Button variant="outline" onClick={() => { setPhase("select"); setQuestions([]); }}>
           Start Another Interview
         </Button>
       </div>
@@ -347,7 +344,7 @@ export default function AudioInterviewPage() {
   }
 
   // PHASES: intro / question / recording / evaluating / result
-  const progress = questions.length > 0 ? ((qIndex) / questions.length) * 100 : 0;
+  const progress = questions.length > 0 ? (qIndex / questions.length) * 100 : 0;
 
   return (
     <div className="mx-auto max-w-xl space-y-6 py-8">
@@ -369,7 +366,6 @@ export default function AudioInterviewPage() {
             </span>
             <p className="text-base font-medium leading-snug">{currentQ?.text}</p>
           </div>
-
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <Clock className="h-3.5 w-3.5" />
             Max {maxSec}s to answer
@@ -377,7 +373,7 @@ export default function AudioInterviewPage() {
         </CardContent>
       </Card>
 
-      {/* Phase: intro — ready to start */}
+      {/* Phase: intro */}
       {phase === "intro" && (
         <div className="flex flex-col items-center gap-4 py-4">
           <p className="text-sm text-muted-foreground text-center">
@@ -420,7 +416,7 @@ export default function AudioInterviewPage() {
           <Progress value={((maxSec - secondsLeft) / maxSec) * 100} className="h-2 w-full" />
           <Button variant="outline" size="sm" onClick={stopRecording} className="gap-2">
             <MicOff className="h-4 w-4" />
-            Stop Early
+            Done — Evaluate My Answer
           </Button>
         </div>
       )}
@@ -449,11 +445,13 @@ export default function AudioInterviewPage() {
             </CardContent>
           </Card>
 
-          {/* Transcript */}
-          <div className="rounded-lg border bg-muted/30 px-4 py-3">
-            <p className="mb-1 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Your Answer</p>
-            <p className="text-sm italic">&ldquo;{currentTranscript}&rdquo;</p>
-          </div>
+          {/* Transcript — what you said */}
+          {currentTranscript && (
+            <div className="rounded-lg border bg-muted/30 px-4 py-3">
+              <p className="mb-1 text-xs font-semibold text-muted-foreground uppercase tracking-wide">What You Said</p>
+              <p className="text-sm italic">&ldquo;{currentTranscript}&rdquo;</p>
+            </div>
+          )}
 
           {/* Playback */}
           {audioUrl && <audio src={audioUrl} controls className="h-9 w-full" />}
@@ -485,7 +483,7 @@ export default function AudioInterviewPage() {
           {/* Actions */}
           <div className="flex gap-2">
             <Button variant="outline" size="sm" className="gap-1.5"
-              onClick={() => { setPhase("intro"); setCurrentEval(null); setAudioUrl(null); setAudioBlob(null); }}>
+              onClick={() => { setPhase("intro"); setCurrentEval(null); setAudioUrl(null); setCurrentTranscript(""); }}>
               <RotateCcw className="h-3.5 w-3.5" /> Retry
             </Button>
             <Button size="sm" className="flex-1 gap-1.5" onClick={handleNext}>
