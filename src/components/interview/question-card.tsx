@@ -36,6 +36,7 @@ import {
   ListChecks,
   Loader2,
   MessageSquare,
+  Mic,
   Microscope,
   Pencil,
   PenLine,
@@ -52,6 +53,7 @@ export const QUESTION_TYPES = [
   { value: "OPEN_ENDED", label: "Open Ended" },
   { value: "SINGLE_CHOICE", label: "Single Choice" },
   { value: "MULTIPLE_CHOICE", label: "Multiple Choice" },
+  { value: "AUDIO", label: "Audio Response" },
   { value: "CODING", label: "Coding" },
   { value: "WHITEBOARD", label: "Whiteboard" },
   { value: "RESEARCH", label: "Research" },
@@ -108,6 +110,13 @@ export const QUESTION_TYPE_STYLES: Record<
     label: "Research",
     badgeClass:
       "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-300",
+    optionClass: "",
+  },
+  AUDIO: {
+    icon: Mic,
+    label: "Audio Response",
+    badgeClass:
+      "border-pink-200 bg-pink-50 text-pink-700 dark:border-pink-800 dark:bg-pink-950 dark:text-pink-300",
     optionClass: "",
   },
 };
@@ -248,7 +257,7 @@ export function QuestionCard({
                       if (v === "MULTIPLE_CHOICE" && local.options) {
                         updates.options = { ...local.options, allowMultiple: true };
                       }
-                      if (v === "OPEN_ENDED" || v === "CODING" || v === "WHITEBOARD" || v === "RESEARCH") {
+                      if (v === "OPEN_ENDED" || v === "CODING" || v === "WHITEBOARD" || v === "RESEARCH" || v === "AUDIO") {
                         updates.options = undefined;
                       }
                       update(updates);
@@ -351,6 +360,36 @@ export function QuestionCard({
                     <Plus className="mr-1 h-3 w-3" />
                     Add Option
                   </Button>
+                </div>
+              )}
+
+              {/* Audio question config */}
+              {local.type === "AUDIO" && (
+                <div className="rounded-lg border border-pink-200 bg-pink-50 p-3 dark:border-pink-800 dark:bg-pink-950/30">
+                  <div className="flex items-center gap-2 text-sm font-medium text-pink-700 dark:text-pink-300">
+                    <Mic className="h-4 w-4" />
+                    Audio Response Question
+                  </div>
+                  <p className="mt-1 text-xs text-pink-600 dark:text-pink-400">
+                    Candidates will record a spoken audio answer. The recording will be transcribed and scored automatically.
+                  </p>
+                  <div className="mt-3 space-y-2">
+                    <Label className="text-xs">Max recording time</Label>
+                    <Select
+                      value={String(local.options?.maxSeconds ?? 120)}
+                      onValueChange={(v) => update({ options: { ...local.options, maxSeconds: Number(v) } })}
+                    >
+                      <SelectTrigger className="w-40">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="60">1 minute</SelectItem>
+                        <SelectItem value="120">2 minutes</SelectItem>
+                        <SelectItem value="180">3 minutes</SelectItem>
+                        <SelectItem value="300">5 minutes</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
               )}
 
@@ -523,6 +562,17 @@ export function QuestionCard({
                   )}
                 </div>
               )}
+            {data.type === "AUDIO" && (
+              <div className="mt-2 flex items-center gap-2 rounded-md border border-pink-200 bg-pink-50 px-3 py-2 text-xs text-pink-700 dark:border-pink-800 dark:bg-pink-950/30 dark:text-pink-300">
+                <Mic className="h-3.5 w-3.5 shrink-0" />
+                Candidate records a spoken answer
+                {data.options?.maxSeconds && (
+                  <span className="ml-auto text-pink-500">
+                    max {data.options.maxSeconds / 60} min
+                  </span>
+                )}
+              </div>
+            )}
             {data.type === "CODING" && data.starterCode?.code && (
               <div className="mt-2 overflow-hidden rounded-md border bg-zinc-950">
                 <div className="flex items-center gap-1.5 border-b border-zinc-800 bg-zinc-900 px-3 py-1.5">

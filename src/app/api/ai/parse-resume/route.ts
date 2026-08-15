@@ -1,11 +1,8 @@
 import OpenAI from "openai";
 import { getAuthUser } from "@/lib/auth";
 import { createLogger } from "@/lib/logger";
+import { extractPdfText } from "@/lib/pdf-extract";
 const log = createLogger("api/ai/parse-resume");
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const pdfParse = require("pdf-parse") as (
-  buffer: Buffer,
-) => Promise<{ text: string }>;
 
 const SYSTEM_PROMPT = `You are an expert resume parser. Extract candidate information from the uploaded resume and return a JSON object with the following fields (use null for missing fields):
 
@@ -72,12 +69,16 @@ export async function POST(req: Request) {
 
     // Extract text locally using pdf-parse (preserves emails reliably)
     const buffer = Buffer.from(await file.arrayBuffer());
-    const pdfData = await pdfParse(buffer);
-    const resumeText = pdfData.text?.trim();
+    let resumeText = "";
+    try {
+      resumeText = await extractPdfText(buffer);
+    } catch (pdfErr) {
+      log.warn("pdf extraction failed:", pdfErr);
+    }
 
     if (!resumeText) {
       return new Response(
-        JSON.stringify({ error: "Could not extract text from the PDF." }),
+        JSON.stringify({ error: "Could not extract text from this PDF. Please try a different file or copy-paste the resume text manually." }),
         { status: 400, headers: { "Content-Type": "application/json" } },
       );
     }
@@ -109,9 +110,13 @@ export async function POST(req: Request) {
           for await (const chunk of stream) {
             const token = chunk.choices[0]?.delta?.content;
             if (token) {
-              controller.enqueue(
-                encoder.encode(`data: ${JSON.stringify({ token })}\n\n`),
-              );
+              // Split into ≤80-char pieces to avoid SSE token-length limits
+              for (let i = 0; i < token.length; i += 80) {
+                const piece = token.slice(i, i + 80);
+                controller.enqueue(
+                  encoder.encode(`data: ${JSON.stringify({ token: piece })}\n\n`),
+                );
+              }
             }
           }
           controller.enqueue(encoder.encode("data: [DONE]\n\n"));

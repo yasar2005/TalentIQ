@@ -12,11 +12,7 @@ export function buildGeneratorPrompt(
     : "";
 
   const contextInstruction = (jobDescription || resumeText)
-    ? `\nCONTEXT DOCUMENTS:
-${jobDescription ? "- A JOB DESCRIPTION has been provided. Tailor questions to assess the specific skills, qualifications, and responsibilities listed in the JD. Derive assessment criteria from the role requirements." : ""}
-${resumeText ? "- A CANDIDATE RESUME has been provided. Include questions that probe the candidate's claimed experience, validate key skills, and explore any gaps or transitions in their background." : ""}
-${jobDescription && resumeText ? "- When both are provided, focus on the intersection: how well the candidate's experience maps to the role requirements, and probe areas where there may be gaps." : ""}
-`
+    ? `\nCONTEXT DOCUMENTS:\n${jobDescription ? "- A JOB DESCRIPTION has been provided. Tailor questions to assess the specific skills, qualifications, and responsibilities listed in the JD. Derive assessment criteria from the role requirements." : ""}\n${resumeText ? "- A CANDIDATE RESUME has been provided. Include questions that probe the candidate's claimed experience, validate key skills, and explore any gaps or transitions in their background." : ""}\n${jobDescription && resumeText ? "- When both are provided, focus on the intersection: how well the candidate's experience maps to the role requirements, and probe areas where there may be gaps." : ""}\n`
     : "";
 
   return [
@@ -39,7 +35,7 @@ GUIDELINES:
 - Group related topics together
 - Place most important questions in the middle (when engagement is highest)
 - End with an open "anything else" question
-- Use OPEN_ENDED for free-text/verbal responses, SINGLE_CHOICE when the participant must pick exactly one option, MULTIPLE_CHOICE when multiple selections are allowed, CODING for programming/algorithm questions, and RESEARCH when the goal is to extract as much detailed information as possible on a topic
+- Use OPEN_ENDED for free-text/verbal responses, SINGLE_CHOICE when the participant must pick exactly one option, MULTIPLE_CHOICE when multiple selections are allowed, CODING for programming/algorithm questions, AUDIO for questions requiring a spoken/recorded audio answer, and RESEARCH when the goal is to extract as much detailed information as possible on a topic
 - For SINGLE_CHOICE and MULTIPLE_CHOICE questions, ALWAYS provide 2-6 clear option strings in the "options" field
 - For CODING questions, set "options" to null. Write a clear problem statement in the question text. Include a "starterCode" object with "language" and "code" fields containing a code template for the participant.
 - Suggest time limits where appropriate
@@ -50,6 +46,7 @@ QUESTION TYPES:
 - "SINGLE_CHOICE": Participant picks exactly one option. MUST include "options" with 2-6 option strings.
 - "MULTIPLE_CHOICE": Participant can select more than one option. MUST include "options" with 2-6 option strings.
 - "CODING": A coding/programming question where the participant writes code using a built-in code editor. Set "options" to null. The question text should clearly describe the problem to solve.
+- "AUDIO": Participant records a spoken audio answer. Set "options" to null. Use for questions where verbal delivery, tone, or communication style matters. Optionally set "maxSeconds" (default 120).
 - "RESEARCH": A deep-dive question designed to extract comprehensive information on a topic. The interviewer will apply deeper follow-ups to explore every angle. Set "options" to null. Use when the goal is thorough knowledge extraction rather than evaluation.
 
 OUTPUT VALID JSON ONLY (no markdown, no explanation):
@@ -65,13 +62,14 @@ OUTPUT VALID JSON ONLY (no markdown, no explanation):
     {
       "order": number,
       "text": "string",
-      "type": "OPEN_ENDED" | "SINGLE_CHOICE" | "MULTIPLE_CHOICE" | "CODING" | "WHITEBOARD" | "RESEARCH",
+      "type": "OPEN_ENDED" | "SINGLE_CHOICE" | "MULTIPLE_CHOICE" | "CODING" | "WHITEBOARD" | "RESEARCH" | "AUDIO",
       "description": "string (helper text for the question)",
       "timeLimitSeconds": number | null,
       "isRequired": true,
       "options": { "options": ["string", "string", ...], "allowMultiple": false } | null,
       "followUpPrompts": ["string"],
-      "starterCode": { "language": "string", "code": "string" } | null
+      "starterCode": { "language": "string", "code": "string" } | null,
+      "maxSeconds": number | null
     }
   ],
   "recommendedSettings": {
@@ -84,14 +82,7 @@ OUTPUT VALID JSON ONLY (no markdown, no explanation):
     },
     {
       role: "user",
-      content: `Create an interview for the following goal:
-
-"${description}"
-
-${durationMinutes ? `Target duration: approximately ${durationMinutes} minutes.` : ""}
-${jobDescription ? `\n--- JOB DESCRIPTION ---\n${jobDescription}\n--- END JOB DESCRIPTION ---\n` : ""}
-${resumeText ? `\n--- CANDIDATE RESUME ---\n${resumeText}\n--- END CANDIDATE RESUME ---\n` : ""}
-Please generate the complete interview structure as JSON.`,
+      content: `Create an interview for the following goal:\n\n"${description}"\n\n${durationMinutes ? `Target duration: approximately ${durationMinutes} minutes.` : ""}\n${jobDescription ? `\n--- JOB DESCRIPTION ---\n${jobDescription}\n--- END JOB DESCRIPTION ---\n` : ""}\n${resumeText ? `\n--- CANDIDATE RESUME ---\n${resumeText}\n--- END CANDIDATE RESUME ---\n` : ""}\nPlease generate the complete interview structure as JSON.`,
     },
   ];
 }
@@ -129,6 +120,7 @@ QUESTION TYPES:
 - "SINGLE_CHOICE": Participant picks exactly one option. MUST include "options" with 2-6 option strings.
 - "MULTIPLE_CHOICE": Participant can select more than one option. MUST include "options" with 2-6 option strings.
 - "CODING": A coding/programming question where the participant writes code. Set "options" to null.
+- "AUDIO": Participant records a spoken audio answer. Set "options" to null. Use for verbal/communication assessment. Optionally set "maxSeconds" (default 120).
 - "RESEARCH": A deep-dive question for extracting comprehensive information on a topic. Set "options" to null.
 
 OUTPUT VALID JSON ONLY (no markdown, no explanation):
@@ -144,13 +136,14 @@ OUTPUT VALID JSON ONLY (no markdown, no explanation):
     {
       "order": number,
       "text": "string",
-      "type": "OPEN_ENDED" | "SINGLE_CHOICE" | "MULTIPLE_CHOICE" | "CODING" | "WHITEBOARD" | "RESEARCH",
+      "type": "OPEN_ENDED" | "SINGLE_CHOICE" | "MULTIPLE_CHOICE" | "CODING" | "WHITEBOARD" | "RESEARCH" | "AUDIO",
       "description": "string (helper text for the question)",
       "timeLimitSeconds": number | null,
       "isRequired": true,
       "options": { "options": ["string", "string", ...], "allowMultiple": false } | null,
       "followUpPrompts": ["string"],
-      "starterCode": { "language": "string", "code": "string" } | null
+      "starterCode": { "language": "string", "code": "string" } | null,
+      "maxSeconds": number | null
     }
   ],
   "recommendedSettings": {
@@ -168,20 +161,7 @@ IMPORTANT: For SINGLE_CHOICE and MULTIPLE_CHOICE questions, ALWAYS include "opti
     },
     {
       role: "user",
-      content: `Current interview:
-Title: ${currentInterview.title}
-Description: ${currentInterview.description ?? "Not set"}
-Objective: ${currentInterview.objective ?? "Not set"}
-Assessment Criteria:
-${criteriaText}
-Questions:
-${questionsText}
-
-${jobDescription ? `\n--- JOB DESCRIPTION ---\n${jobDescription}\n--- END JOB DESCRIPTION ---\n` : ""}
-${resumeText ? `\n--- CANDIDATE RESUME ---\n${resumeText}\n--- END CANDIDATE RESUME ---\n` : ""}
-User feedback: "${feedback}"
-
-Please improve this interview based on the feedback. Output ONLY valid JSON.`,
+      content: `Current interview:\nTitle: ${currentInterview.title}\nDescription: ${currentInterview.description ?? "Not set"}\nObjective: ${currentInterview.objective ?? "Not set"}\nAssessment Criteria:\n${criteriaText}\nQuestions:\n${questionsText}\n\n${jobDescription ? `\n--- JOB DESCRIPTION ---\n${jobDescription}\n--- END JOB DESCRIPTION ---\n` : ""}\n${resumeText ? `\n--- CANDIDATE RESUME ---\n${resumeText}\n--- END CANDIDATE RESUME ---\n` : ""}\nUser feedback: "${feedback}"\n\nPlease improve this interview based on the feedback. Output ONLY valid JSON.`,
     },
   ];
 }

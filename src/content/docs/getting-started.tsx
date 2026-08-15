@@ -7,9 +7,9 @@ import type { DocArticle } from "./types";
 
 export const gettingStartedArticles: DocArticle[] = [
   {
-    slug: "what-is-aural",
+    slug: "what-is-talentiq",
     categorySlug: "getting-started",
-    title: "What is Aural?",
+    title: "What is TalentIQ?",
     description: "AI-powered interview platform for hiring, research, and practice",
     audience: "both",
     order: 1,
@@ -17,7 +17,7 @@ export const gettingStartedArticles: DocArticle[] = [
       <>
         <h2>Product Overview</h2>
         <p>
-          Aural is an AI-powered interview platform that conducts structured interviews autonomously. You design an interview, share a link, and Aural&apos;s AI handles the conversation — asking questions, probing with follow-ups, and generating detailed analysis when the session is complete.
+          TalentIQ is an AI-powered interview platform that conducts structured interviews autonomously. You design an interview, share a link, and TalentIQ&apos;s AI handles the conversation — asking questions, probing with follow-ups, and generating detailed analysis when the session is complete.
         </p>
 
         <h3>Key Features</h3>

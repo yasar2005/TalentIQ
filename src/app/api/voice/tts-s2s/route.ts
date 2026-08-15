@@ -25,7 +25,7 @@ type TtsClientFormat = "wav" | "mp3" | "pcm_f32le";
 function resolveClientFormat(req: Request): TtsClientFormat {
   const url = new URL(req.url);
   const queryFormat = url.searchParams.get("format")?.toLowerCase();
-  const format = req.headers.get("x-aural-tts-format")?.toLowerCase();
+  const format = req.headers.get("x-talentiq-tts-format")?.toLowerCase();
   const accept = req.headers.get("accept")?.toLowerCase() || "";
 
   /** Raw float32 LE — only for callers that decode PCM manually (not HTMLAudioElement). */
@@ -223,8 +223,8 @@ export async function POST(req: Request) {
       headers: {
         "Content-Type": contentType,
         "Cache-Control": "no-store",
-        "X-Aural-TTS-Format": responseFormat,
-        "X-Aural-TTS-Provider": "seed-tts-2.0",
+        "X-TalentIQ-TTS-Format": responseFormat,
+        "X-TalentIQ-TTS-Provider": "seed-tts-2.0",
       },
     });
   } catch (err) {

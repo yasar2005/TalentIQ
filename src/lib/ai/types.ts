@@ -62,7 +62,7 @@ export interface GeneratedInterview {
 export interface GeneratedQuestion {
   order: number;
   text: string;
-  type: "OPEN_ENDED" | "SINGLE_CHOICE" | "MULTIPLE_CHOICE" | "CODING" | "WHITEBOARD" | "RESEARCH";
+  type: "OPEN_ENDED" | "SINGLE_CHOICE" | "MULTIPLE_CHOICE" | "CODING" | "WHITEBOARD" | "RESEARCH" | "AUDIO";
   description?: string;
   timeLimitSeconds?: number;
   isRequired: boolean;
@@ -70,4 +70,6 @@ export interface GeneratedQuestion {
   followUpPrompts?: string[];
   /** Starter code template for CODING questions. */
   starterCode?: { language: string; code: string };
+  /** Max recording seconds for AUDIO questions. */
+  maxSeconds?: number;
 }

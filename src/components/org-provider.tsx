@@ -12,7 +12,7 @@ import {
 import { trpc } from "@/lib/trpc/client";
 import { useAuth } from "@/components/auth-provider";
 
-const STORAGE_KEY = "aural:currentOrgId";
+const STORAGE_KEY = "talentiq:currentOrgId";
 
 export interface OrgInfo {
   id: string;

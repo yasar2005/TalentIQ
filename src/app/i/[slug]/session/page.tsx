@@ -19,7 +19,7 @@ import dynamic from "next/dynamic";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-const STORAGE_PREFIX = "aural_session_";
+const STORAGE_PREFIX = "talentiq_session_";
 
 const ChatInterface = dynamic(
   () => import("@/components/session/chat-interface").then((m) => m.ChatInterface),

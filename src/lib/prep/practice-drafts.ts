@@ -1,7 +1,7 @@
 /** Per-question answer drafts saved locally so users can revise later. */
 
 function draftKey(sessionId: string, questionId: string): string {
-  return `aural_practice_draft:${sessionId}:${questionId}`;
+  return `talentiq_practice_draft:${sessionId}:${questionId}`;
 }
 
 export function loadPracticeDraft(

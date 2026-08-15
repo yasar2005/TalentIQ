@@ -1,14 +1,10 @@
 import { getAuthUser } from "@/lib/auth";
 import { createLogger } from "@/lib/logger";
+import { extractPdfText } from "@/lib/pdf-extract";
 import { fetchUrlWithReaderFallback } from "@/lib/url-fetch";
 import * as cheerio from "cheerio";
 
 const log = createLogger("api/ai/extract-text");
-
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const pdfParse = require("pdf-parse") as (
-  buffer: Buffer,
-) => Promise<{ text: string }>;
 
 const MAX_TEXT_LENGTH = 15_000;
 
@@ -55,8 +51,7 @@ export async function POST(req: Request) {
 
     if (file) {
       const buffer = Buffer.from(await file.arrayBuffer());
-      const pdfData = await pdfParse(buffer);
-      extractedText = pdfData.text?.trim() ?? "";
+      extractedText = await extractPdfText(buffer);
 
       if (!extractedText) {
         return Response.json(
@@ -86,9 +81,8 @@ export async function POST(req: Request) {
 
       if (contentType.includes("application/pdf")) {
         const buffer = Buffer.from(await res.arrayBuffer());
-        const pdfData = await pdfParse(buffer);
-        extractedText = pdfData.text?.trim() ?? "";
-      } else if (contentType.includes("text/plain")) {
+        extractedText = await extractPdfText(buffer);
+      } else if (contentType.includes("text/plain") ) {
         extractedText = (await res.text()).trim();
       } else {
         const html = await res.text();

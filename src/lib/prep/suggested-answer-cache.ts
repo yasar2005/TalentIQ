@@ -4,7 +4,7 @@ export type SuggestedAnswerCacheEntry = {
 };
 
 const cache = new Map<string, SuggestedAnswerCacheEntry>();
-const STORAGE_PREFIX = "aural_suggested_answer:";
+const STORAGE_PREFIX = "talentiq_suggested_answer:";
 
 export function suggestedAnswerCacheKey(
   userId: string,

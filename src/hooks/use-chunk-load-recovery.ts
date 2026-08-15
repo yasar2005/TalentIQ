@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 
-const CHUNK_RECOVERY_KEY = "aural:chunk-load-recovery-at";
+const CHUNK_RECOVERY_KEY = "talentiq:chunk-load-recovery-at";
 const CHUNK_RECOVERY_COOLDOWN_MS = 30_000;
 
 function getErrorText(value: unknown): string {

@@ -103,7 +103,7 @@ export const CHAT_TOUR_STEPS: IntervieweeTourStep[] = [
   },
 ];
 
-export const TOUR_STORAGE_KEY = "aural_interviewee_tour_done";
+export const TOUR_STORAGE_KEY = "talentiq_interviewee_tour_done";
 
 export function markTourCompleted(): void {
   if (typeof window === "undefined") return;

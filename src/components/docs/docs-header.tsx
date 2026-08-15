@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { AuralLogo } from "@/components/ui/aural-logo";
+import { TalentIQLogo } from "@/components/ui/talentiq-logo";
 import { DocsSearch } from "./docs-search";
 import { ExternalLink } from "lucide-react";
 
@@ -13,12 +13,9 @@ export function DocsHeader() {
           href="/docs"
           className="flex items-center gap-1.5 shrink-0 group"
         >
-          <AuralLogo
-            size={30}
-            className="transition-transform duration-300 group-hover:scale-110"
-          />
-          <span className="font-heading text-base font-bold tracking-[1.5px] text-mk-text">
-            AURAL
+          <TalentIQLogo size={30} className="transition-transform duration-300 group-hover:scale-110" />
+          <span className="font-heading text-base font-bold tracking-tight text-mk-text">
+            TalentIQ
           </span>
         </Link>
 

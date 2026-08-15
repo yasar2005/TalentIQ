@@ -12,7 +12,7 @@ import { Link2Off, Loader2, Lock, MessageSquare, Mic, Plus, RotateCcw } from "lu
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 
-const STORAGE_PREFIX = "aural_session_";
+const STORAGE_PREFIX = "talentiq_session_";
 
 export default function PublicInterviewPage() {
   const params = useParams();

@@ -246,7 +246,7 @@ export function QuestionBuilder({
                     updateMutation.mutate({
                       id: q.id,
                       text: updated.text,
-                      type: updated.type as "OPEN_ENDED" | "SINGLE_CHOICE" | "MULTIPLE_CHOICE" | "CODING" | "WHITEBOARD" | "RESEARCH",
+                      type: updated.type as "OPEN_ENDED" | "SINGLE_CHOICE" | "MULTIPLE_CHOICE" | "CODING" | "WHITEBOARD" | "RESEARCH" | "AUDIO",
                       description: updated.description as string | undefined,
                       isRequired: updated.isRequired,
                       options: updated.options,
@@ -287,7 +287,7 @@ export function QuestionBuilder({
                 createMutation.mutate({
                   interviewId,
                   text: data.text,
-                  type: data.type as "OPEN_ENDED" | "SINGLE_CHOICE" | "MULTIPLE_CHOICE" | "CODING" | "WHITEBOARD" | "RESEARCH",
+                  type: data.type as "OPEN_ENDED" | "SINGLE_CHOICE" | "MULTIPLE_CHOICE" | "CODING" | "WHITEBOARD" | "RESEARCH" | "AUDIO",
                   description: data.description as string | undefined,
                   isRequired: data.isRequired,
                   options: data.options,
@@ -636,7 +636,7 @@ function ImportQuestionsDialog({
           order: baseOrder + i,
           text: q.text,
           description: q.description,
-          type: q.type as "OPEN_ENDED" | "SINGLE_CHOICE" | "MULTIPLE_CHOICE" | "CODING" | "WHITEBOARD" | "RESEARCH",
+          type: q.type as "OPEN_ENDED" | "SINGLE_CHOICE" | "MULTIPLE_CHOICE" | "CODING" | "WHITEBOARD" | "RESEARCH" | "AUDIO",
           options: q.options ?? undefined,
           starterCode: q.starterCode as { language: string; code: string } | null | undefined,
         })

@@ -36,6 +36,8 @@ import {
     FileText,
     Loader2,
     MessageCircle,
+    Mic,
+    MicOff,
     Plus,
     Save,
     X
@@ -244,6 +246,64 @@ export function ChatInterface({
   const currentQ = interview.questions[currentQuestion];
   const isCodingQuestion = currentQ?.type === "CODING";
   const isWhiteboardQuestion = currentQ?.type === "WHITEBOARD";
+  const isAudioQuestion = currentQ?.type === "AUDIO";
+
+  // ── Audio recording state (AUDIO questions) ─────────────────────
+  const [audioRecording, setAudioRecording] = useState(false);
+  const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
+  const [audioUrl, setAudioUrl] = useState<string | null>(null);
+  const [audioSeconds, setAudioSeconds] = useState(0);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const audioTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const maxAudioSeconds = (currentQ as { options?: { maxSeconds?: number } } | undefined)?.options?.maxSeconds ?? 120;
+
+  const startAudioRecording = useCallback(async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      audioChunksRef.current = [];
+      const mr = new MediaRecorder(stream);
+      mr.ondataavailable = (e) => { if (e.data.size > 0) audioChunksRef.current.push(e.data); };
+      mr.onstop = () => {
+        stream.getTracks().forEach((t) => t.stop());
+        const blob = new Blob(audioChunksRef.current, { type: "audio/webm" });
+        setAudioBlob(blob);
+        setAudioUrl(URL.createObjectURL(blob));
+      };
+      mr.start();
+      mediaRecorderRef.current = mr;
+      setAudioRecording(true);
+      setAudioSeconds(0);
+      audioTimerRef.current = setInterval(() => {
+        setAudioSeconds((s) => {
+          if (s + 1 >= maxAudioSeconds) {
+            mr.stop();
+            setAudioRecording(false);
+            if (audioTimerRef.current) clearInterval(audioTimerRef.current);
+          }
+          return s + 1;
+        });
+      }, 1000);
+    } catch {
+      /* mic permission denied */
+    }
+  }, [maxAudioSeconds]);
+
+  const stopAudioRecording = useCallback(() => {
+    mediaRecorderRef.current?.stop();
+    setAudioRecording(false);
+    if (audioTimerRef.current) clearInterval(audioTimerRef.current);
+  }, []);
+
+  // Reset audio state when question changes
+  useEffect(() => {
+    setAudioBlob(null);
+    setAudioUrl(null);
+    setAudioSeconds(0);
+    setAudioRecording(false);
+    if (audioTimerRef.current) clearInterval(audioTimerRef.current);
+    mediaRecorderRef.current?.stop();
+  }, [currentQuestion]);
 
   // ── Draggable split handlers ──────────────────────────────
   const handleSplitMouseDown = useCallback((e: React.PointerEvent) => {
@@ -1024,6 +1084,40 @@ export function ChatInterface({
     void handleQuestionTransition("previous");
   }
 
+  async function handleSubmitAudio() {
+    if (preview || !audioBlob || sending) return;
+    setSending(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", audioBlob, "answer.webm");
+      formData.append("sessionId", sessionId);
+      formData.append("questionId", interview.questions[currentQuestion]?.id ?? "");
+      const uploadRes = await fetch("/api/session/upload", { method: "POST", body: formData });
+      if (!uploadRes.ok) return;
+      const { transcript } = await uploadRes.json();
+      const content = transcript ?? "[Audio response submitted]"
+      const userMessage: Message = {
+        id: crypto.randomUUID(),
+        role: "USER",
+        content,
+        timestamp: new Date().toISOString(),
+      };
+      const updatedMessages = [...messages, userMessage];
+      setMessages(updatedMessages);
+      setAudioBlob(null);
+      setAudioUrl(null);
+      setAudioSeconds(0);
+      await fetch("/api/trpc/session.sendMessage", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ json: { sessionId, content, questionId: interview.questions[currentQuestion]?.id } }),
+      });
+      await getAIResponse(updatedMessages);
+    } finally {
+      setSending(false);
+    }
+  }
+
   async function handleSend() {
     if (preview || !input.trim() || sending) return;
 
@@ -1297,6 +1391,58 @@ export function ChatInterface({
           compact ? "" : "mx-auto max-w-3xl",
         )}
       >
+        {isAudioQuestion && (
+          <div className="mb-2 rounded-xl border border-pink-200 bg-pink-50 p-3 dark:border-pink-800 dark:bg-pink-950/30">
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                disabled={preview}
+                onClick={audioRecording ? stopAudioRecording : startAudioRecording}
+                className={cn(
+                  "flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition-colors",
+                  audioRecording
+                    ? "bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                    : "bg-pink-500 text-white hover:bg-pink-600",
+                )}
+              >
+                {audioRecording ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
+              </button>
+              <div className="flex-1 min-w-0">
+                {audioRecording ? (
+                  <p className="text-xs font-medium text-pink-700 dark:text-pink-300 animate-pulse">
+                    Recording... {audioSeconds}s / {maxAudioSeconds}s
+                  </p>
+                ) : audioUrl ? (
+                  <audio src={audioUrl} controls className="h-8 w-full" />
+                ) : (
+                  <p className="text-xs text-pink-600 dark:text-pink-400">
+                    Click the mic to record your spoken answer
+                  </p>
+                )}
+              </div>
+              {audioUrl && !audioRecording && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => { setAudioBlob(null); setAudioUrl(null); setAudioSeconds(0); }}
+                    className="shrink-0 rounded p-1 text-pink-500 hover:bg-pink-100 dark:hover:bg-pink-900/30"
+                    title="Re-record"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    disabled={sending}
+                    onClick={() => void handleSubmitAudio()}
+                    className="shrink-0 rounded-md bg-pink-500 px-3 py-1 text-xs font-medium text-white hover:bg-pink-600 disabled:opacity-50"
+                  >
+                    {sending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Submit"}
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        )}
         <ChatComposer
           value={input}
           onChange={setInput}

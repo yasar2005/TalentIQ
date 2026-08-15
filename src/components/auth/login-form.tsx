@@ -1,7 +1,7 @@
 "use client";
 
 import { useAppLocale } from "@/components/app-locale-provider";
-import { AuralLogo } from "@/components/ui/aural-logo";
+import { TalentIQLogo } from "@/components/ui/talentiq-logo";
 import { Button } from "@/components/ui/button";
 import {
     Card,
@@ -58,7 +58,7 @@ export function LoginForm() {
   return (
     <Card>
       <CardHeader className="text-center">
-        <AuralLogo size={64} className="mx-auto mb-2" />
+        <TalentIQLogo size={64} className="mx-auto mb-2" />
         <CardTitle className="font-heading text-2xl">
           {t("auth.welcomeBack")}
         </CardTitle>

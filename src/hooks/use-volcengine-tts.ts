@@ -299,7 +299,7 @@ export function useVolcengineTts(language?: string) {
             headers: {
               Accept: "audio/mpeg, audio/wav",
               "Content-Type": "application/json",
-              "X-Aural-TTS-Format": "mp3",
+              "X-TalentIQ-TTS-Format": "mp3",
             },
             body: JSON.stringify({ text: trimmed, language: lang }),
             signal: abort.signal,
@@ -328,7 +328,7 @@ export function useVolcengineTts(language?: string) {
 
         const mime = resolveBlobMimeType(
           res.headers.get("content-type"),
-          res.headers.get("x-aural-tts-format"),
+          res.headers.get("x-talentiq-tts-format"),
         );
         const buffer = await res.arrayBuffer();
         if ((abort.signal.aborted && !didTimeout) || buffer.byteLength === 0) {

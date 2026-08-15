@@ -13,6 +13,7 @@ const questionInput = z.object({
     "CODING",
     "WHITEBOARD",
     "RESEARCH",
+    "AUDIO",
   ]),
   options: z.any().optional(),
   starterCode: z
@@ -252,6 +253,7 @@ export const questionRouter = router({
             "CODING",
             "WHITEBOARD",
             "RESEARCH",
+            "AUDIO",
           ])
           .optional(),
         limit: z.number().min(1).max(200).default(200),

@@ -106,7 +106,7 @@ export const PRACTICE_TOUR_STEPS: PracticeTourStep[] = [
   },
 ];
 
-export const PRACTICE_TOUR_STORAGE_KEY = "aural_practice_tour_done";
+export const PRACTICE_TOUR_STORAGE_KEY = "talentiq_practice_tour_done";
 
 export function isPracticeTourCompleted(): boolean {
   if (typeof window === "undefined") return true;

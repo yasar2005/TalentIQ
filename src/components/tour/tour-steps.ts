@@ -114,8 +114,8 @@ export const TOUR_STEPS: TourStep[] = [
   },
 ];
 
-export const TOUR_STORAGE_KEY = "aural_onboarding_tour";
-export const TOUR_EDIT_URL_KEY = "aural_tour_last_edit_url";
+export const TOUR_STORAGE_KEY = "talentiq_onboarding_tour";
+export const TOUR_EDIT_URL_KEY = "talentiq_tour_last_edit_url";
 
 export interface TourState {
   currentStep: number;
