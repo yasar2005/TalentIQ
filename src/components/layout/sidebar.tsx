@@ -32,6 +32,7 @@ import {
     Loader2,
     LogOut,
     MessageSquare,
+    Mic,
     Monitor,
     Moon,
     Palette,
@@ -166,6 +167,7 @@ export function Sidebar({
     { name: t("sidebar.sessions"), href: "/candidates", icon: PlayCircle },
     { name: t("sidebar.questions"), href: "/questions", icon: HelpCircle },
     { name: t("sidebar.answerBank"), href: "/answer-bank", icon: BookMarked },
+    { name: "Audio Interview", href: "/audio-interview", icon: Mic },
   ];
 
   useEffect(() => {
