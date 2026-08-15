@@ -1,0 +1,211 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 220 20% 97%;
+    --foreground: 224 15% 15%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 224 15% 15%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 224 15% 15%;
+
+    --primary: 243 75% 59%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 220 14% 90%;
+    --secondary-foreground: 224 15% 25%;
+
+    --muted: 220 14% 92%;
+    --muted-foreground: 220 10% 46%;
+
+    --accent: 243 60% 93%;
+    --accent-foreground: 243 75% 35%;
+
+    --destructive: 0 75% 42%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 220 13% 86%;
+    --input: 220 13% 86%;
+    --ring: 243 75% 59%;
+
+    --radius: 0.625rem;
+  }
+
+  .dark {
+    --background: 224 20% 9%;
+    --foreground: 220 20% 92%;
+
+    --card: 224 18% 12%;
+    --card-foreground: 220 20% 92%;
+
+    --popover: 224 18% 12%;
+    --popover-foreground: 220 20% 92%;
+
+    --primary: 243 80% 68%;
+    --primary-foreground: 243 75% 15%;
+
+    --secondary: 224 14% 18%;
+    --secondary-foreground: 220 20% 92%;
+
+    --muted: 224 14% 18%;
+    --muted-foreground: 220 10% 58%;
+
+    --accent: 243 40% 22%;
+    --accent-foreground: 243 60% 80%;
+
+    --destructive: 0 91% 71%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 224 12% 20%;
+    --input: 224 12% 20%;
+    --ring: 243 80% 68%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  html {
+    scroll-behavior: smooth;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  body:has(.dashboard-shell) {
+    overflow: hidden;
+  }
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-heading), system-ui, sans-serif;
+  }
+}
+
+/* ── Custom scrollbar ─────────────────────────────────────────── */
+.code-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: hsl(var(--muted-foreground) / 0.25) transparent;
+}
+.code-scrollbar:hover {
+  scrollbar-color: hsl(var(--muted-foreground) / 0.4) transparent;
+}
+.code-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.code-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+  border-radius: 3px;
+}
+.code-scrollbar::-webkit-scrollbar-thumb {
+  background-color: hsl(var(--muted-foreground) / 0.2);
+  border-radius: 3px;
+  transition: background-color 0.2s;
+}
+.code-scrollbar::-webkit-scrollbar-thumb:hover {
+  background-color: hsl(var(--muted-foreground) / 0.4);
+}
+.code-scrollbar::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+.monaco-scrollbar .slider {
+  border-radius: 3px !important;
+}
+
+/* ── Force light theme during PDF capture ────────────────────── */
+.pdf-capture,
+.pdf-capture * {
+  --background: 220 20% 97%;
+  --foreground: 224 15% 15%;
+  --card: 0 0% 100%;
+  --card-foreground: 224 15% 15%;
+  --primary: 243 75% 59%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 220 14% 90%;
+  --secondary-foreground: 224 15% 25%;
+  --muted: 220 14% 92%;
+  --muted-foreground: 220 10% 46%;
+  --border: 220 13% 86%;
+  --input: 220 13% 86%;
+  --ring: 243 75% 59%;
+  color-scheme: light;
+}
+
+/* ── Print styles ─────────────────────────────────────────────── */
+@media print {
+  :root {
+    color-scheme: light !important;
+    --background: 220 20% 97%;
+    --foreground: 224 15% 15%;
+    --card: 0 0% 100%;
+    --card-foreground: 224 15% 15%;
+    --primary: 243 75% 59%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 220 14% 90%;
+    --secondary-foreground: 224 15% 25%;
+    --muted: 220 14% 92%;
+    --muted-foreground: 220 10% 46%;
+    --border: 220 13% 86%;
+  }
+
+  html, body {
+    height: auto !important;
+    overflow: visible !important;
+    background: white !important;
+    color: black !important;
+  }
+
+  aside, header, .no-print {
+    display: none !important;
+  }
+
+  main {
+    overflow: visible !important;
+    padding: 0 !important;
+    height: auto !important;
+  }
+
+  main > * > * { overflow: visible !important; }
+  * { overflow: visible !important; }
+  .space-y-6 > * { break-inside: avoid; }
+}
+
+/* AI button spinning rainbow border */
+@property --ai-border-angle {
+  syntax: "<angle>";
+  initial-value: 0deg;
+  inherits: false;
+}
+.ai-border-spin {
+  position: relative;
+  isolation: isolate;
+}
+.ai-border-spin::before {
+  content: "";
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  border-radius: inherit;
+  background: conic-gradient(
+    from var(--ai-border-angle, 0deg),
+    #6366f1, #8b5cf6, #ec4899, #f59e0b, #10b981, #6366f1
+  );
+  animation: ai-spin 2s linear infinite;
+  will-change: --ai-border-angle;
+}
+@keyframes ai-spin {
+  to { --ai-border-angle: 360deg; }
+}
+
+/* Guided tour */
+.tour-tooltip-enter {
+  animation: tour-fade-in 0.25s ease-out;
+}
+@keyframes tour-fade-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
