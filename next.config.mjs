@@ -3,7 +3,6 @@ const nextConfig = {
   allowedDevOrigins: ["127.0.0.1"],
   serverExternalPackages: [
     "pdf-parse",
-    "pdfjs-dist",
     "ws",
     "bufferutil",
     "utf-8-validate",
